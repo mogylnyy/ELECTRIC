@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+torch
+opencv-python
+paddleocr
+paddlepaddle==2.6.1
+requests
+python-dotenv
+inference-sdk
+Pillow
+pyyaml
+matplotlib
+seaborn
