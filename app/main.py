@@ -63,7 +63,7 @@ async def predict(file: UploadFile = File(...)):
         # === 3. Roboflow API (детекция цифр)
         print("📡 Отправка ROI в Roboflow...")
         _, img_encoded = cv2.imencode('.jpg', roi_darker)
-        response = client.infer(file=img_encoded.tobytes(), model_id=ROBOFLOW_MODEL_ID)
+        response = client.infer(image=img_encoded.tobytes(), model_id=ROBOFLOW_MODEL_ID)
         preds = response.get("predictions", [])
         print("📡 Ответ получен от Roboflow.")
 
