@@ -11,3 +11,4 @@ Pillow
 pyyaml
 matplotlib
 seaborn
+python-multipart
