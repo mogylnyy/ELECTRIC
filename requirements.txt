@@ -6,7 +6,7 @@ paddleocr
 paddlepaddle==2.6.1
 requests
 python-dotenv
-inference-sdk==0.0.5
+inference-sdk
 Pillow
 pyyaml
 matplotlib
