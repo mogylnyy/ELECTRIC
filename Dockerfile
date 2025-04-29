@@ -1,14 +1,15 @@
 FROM python:3.10-slim
 
-# Устанавливаем system зависимости
+# Установка системных зависимостей
 RUN apt-get update && apt-get install -y \
-    git \
     libgl1-mesa-glx \
     libglib2.0-0 \
     libxext6 \
     libsm6 \
     libxrender1 \
+    libgl1 \
     wget \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
