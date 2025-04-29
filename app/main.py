@@ -24,7 +24,7 @@ app = FastAPI()
 print("🚀 Загрузка моделей...")
 model_v5 = torch.hub.load('yolov5', 'custom', path='app/yolov5_model/best.pt', source='local')
 ocr = PaddleOCR(det=False, use_angle_cls=False, lang='en')
-client = InferenceHTTPClient(api_url="https://serverless.roboflow.com", api_key=ROBOFLOW_API_KEY)
+client = InferenceHTTPClient(api_url="https://detect.roboflow.com", api_key=ROBOFLOW_API_KEY)
 print("✅ Модели загружены успешно.")
 
 # === Функция затемнения ROI
@@ -62,8 +62,13 @@ async def predict(file: UploadFile = File(...)):
 
         # === 3. Roboflow API (детекция цифр)
         print("📡 Отправка ROI в Roboflow...")
-        _, img_encoded = cv2.imencode('.jpg', roi_darker)
-        response = client.infer(image=img_encoded.tobytes(), model_id=ROBOFLOW_MODEL_ID)
+
+        # Сохраняем ROI во временный файл
+        tmp_filename = "tmp.jpg"
+        cv2.imwrite(tmp_filename, roi_darker)
+
+        # Передаём путь к файлу через file_path
+        response = client.infer(file_path=tmp_filename, model_id=ROBOFLOW_MODEL_ID)
         preds = response.get("predictions", [])
         print("📡 Ответ получен от Roboflow.")
 
