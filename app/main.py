@@ -37,26 +37,22 @@ def to_base64(img):
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
-    debug = {}
     try:
         contents = await file.read()
         nparr = np.frombuffer(contents, np.uint8)
         img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img_bgr is None:
-            return {"result": "Fail", "error": "Image decode failed"}
+            return {"result": "Fail"}
 
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
         results = model_v5(img_rgb)
         boxes = results.xyxy[0].cpu().numpy()
         if len(boxes) == 0:
-            return {"result": "Fail", "error": "YOLOv5 ROI not found"}
+            return {"result": "Fail"}
 
         x1, y1, x2, y2 = map(int, boxes[0][:4])
         roi = img_bgr[y1:y2, x1:x2]
-        debug["roi_original_b64"] = to_base64(roi)
-
         roi_darker = darken(roi)
-        debug["roi_darker_b64"] = to_base64(roi_darker)
 
         tmp_filename = "tmp.jpg"
         cv2.imwrite(tmp_filename, roi_darker)
@@ -65,12 +61,12 @@ async def predict(file: UploadFile = File(...)):
             os.remove(tmp_filename)
 
         preds = response.get("predictions", [])
-        debug["roboflow_raw"] = preds
         if not preds:
-            return {"result": "Fail", "debug": debug}
+            return {"result": "Fail"}
 
         median_y = np.median([p["y"] for p in preds])
         preds = [p for p in preds if p["y"] >= median_y * 0.9]
+
         digit_imgs = []
         for p in sorted(preds, key=lambda b: b["x"]):
             x, y = int(p["x"]), int(p["y"])
@@ -84,28 +80,25 @@ async def predict(file: UploadFile = File(...)):
             digit_imgs.append(resized)
 
         if not digit_imgs:
-            return {"result": "Fail", "debug": debug}
+            return {"result": "Fail"}
 
         row = cv2.hconcat(digit_imgs)
-        debug["row_b64"] = to_base64(row)
-
-        # === CLAHE-предобработка перед OCR
         img_rgb_row = cv2.cvtColor(row, cv2.COLOR_BGR2RGB)
         ocr_results = ocr.ocr(img_rgb_row, det=False)
 
         if ocr_results and isinstance(ocr_results[0], list) and len(ocr_results[0]) > 0:
             raw_text = ocr_results[0][0][0]
-            debug["raw_text"] = raw_text
             clean = re.sub(r"[^0-9]", "", raw_text).strip()
+
             if len(clean) == 8 and clean.startswith("1"):
                 clean = clean[1:]
-            if clean:
-                return {"result": clean, "debug": debug}
+
+            if clean and len(clean) <= 8:
+                return {"result": clean}
             else:
-                return {"result": "Fail", "debug": debug}
+                return {"result": "Fail"}
         else:
-            debug["raw_text"] = ""
-            return {"result": "Fail", "debug": debug}
-    except Exception as e:
-        debug["exception"] = str(e)
-        return {"result": "Fail", "error": str(e), "debug": debug}
+            return {"result": "Fail"}
+
+    except Exception:
+        return {"result": "Fail"}
