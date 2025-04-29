@@ -7,7 +7,6 @@ RUN apt-get update && apt-get install -y \
     libxext6 \
     libsm6 \
     libxrender1 \
-    libgl1 \
     wget \
     git \
     && rm -rf /var/lib/apt/lists/*
@@ -16,9 +15,9 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 COPY . .
 
-# Установка Python-зависимостей вручную (обходим ResolutionImpossible)
+# Установка Python-зависимостей вручную (с точной фиксацией numpy)
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
- && pip install --no-cache-dir git+https://github.com/roboflow/inference.git \
+ && pip install --no-cache-dir git+https://github.com/roboflow/inference.git@main \
  && pip install --no-cache-dir \
     fastapi==0.111.0 \
     uvicorn==0.19.0 \
@@ -33,7 +32,8 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
     pyyaml==6.0.1 \
     matplotlib==3.6.3 \
     seaborn==0.11.2 \
-    python-multipart==0.0.9
+    python-multipart==0.0.9 \
+    numpy==1.23.5
 
 EXPOSE 8000
 
