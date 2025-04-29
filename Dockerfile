@@ -1,7 +1,8 @@
 FROM python:3.10-slim
 
-# Системные зависимости
+# Устанавливаем system зависимости
 RUN apt-get update && apt-get install -y \
+    git \
     libgl1-mesa-glx \
     libglib2.0-0 \
     libxext6 \
@@ -13,6 +14,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 COPY . .
 
+# Обновляем pip и ставим зависимости
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir -r requirements.txt
 
