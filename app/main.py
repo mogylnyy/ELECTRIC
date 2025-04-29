@@ -68,7 +68,7 @@ async def predict(file: UploadFile = File(...)):
         cv2.imwrite(tmp_filename, roi_darker)
 
         # Передаём путь к файлу через file_path
-        response = client.infer(file_path=tmp_filename, model_id=ROBOFLOW_MODEL_ID)
+        response = client.infer(tmp_filename, model_id=ROBOFLOW_MODEL_ID)
         preds = response.get("predictions", [])
         print("📡 Ответ получен от Roboflow.")
 
