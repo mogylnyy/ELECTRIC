@@ -104,3 +104,6 @@ async def predict(file: UploadFile = File(...)):
         else:
             debug["raw_text"] = ""
             return {"result": "Fail", "debug": debug}
+    except Exception as e:
+        debug["exception"] = str(e)
+        return {"result": "Fail", "error": str(e), "debug": debug}
