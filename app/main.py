@@ -18,9 +18,15 @@ app = FastAPI()
 
 print("🚀 Загрузка моделей...")
 model_v5 = torch.hub.load('yolov5', 'custom', path='app/yolov5_model/best.pt', source='local')
-ocr = PaddleOCR(det=False, use_angle_cls=False, lang='en')
+ocr = PaddleOCR(
+    det=False,
+    use_angle_cls=False,
+    lang='en',
+    rec_model_dir=None  # <=== Важно: загружает heavy (PP-OCRv3)
+)
 client = InferenceHTTPClient(api_url="https://serverless.roboflow.com", api_key=ROBOFLOW_API_KEY)
 print("✅ Модели загружены успешно.")
+
 
 def darken(image, factor=0.75):
     return np.clip(image * factor, 0, 255).astype(np.uint8)
