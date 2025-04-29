@@ -1,10 +1,9 @@
-# app/main.py
-
 import os
 import cv2
 import numpy as np
 import torch
 import re
+import base64
 from fastapi import FastAPI, UploadFile, File
 from paddleocr import PaddleOCR
 from inference_sdk import InferenceHTTPClient
@@ -12,76 +11,60 @@ from dotenv import load_dotenv
 
 # === Загрузка переменных окружения
 load_dotenv()
-
 ROBOFLOW_API_KEY = os.getenv("ROBOFLOW_API_KEY")
 ROBOFLOW_MODEL_ID = "digitdetector-unbek/1"
 
-# === Инициализация FastAPI
 app = FastAPI()
 
-# === Инициализация моделей
 print("🚀 Загрузка моделей...")
 model_v5 = torch.hub.load('yolov5', 'custom', path='app/yolov5_model/best.pt', source='local')
 ocr = PaddleOCR(det=False, use_angle_cls=False, lang='en')
 client = InferenceHTTPClient(api_url="https://serverless.roboflow.com", api_key=ROBOFLOW_API_KEY)
 print("✅ Модели загружены успешно.")
 
-# === Функция затемнения ROI
 def darken(image, factor=0.75):
     return np.clip(image * factor, 0, 255).astype(np.uint8)
 
+def to_base64(img):
+    _, buffer = cv2.imencode('.jpg', img)
+    return base64.b64encode(buffer).decode('utf-8')
+
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
+    debug = {}
     try:
-        print("📥 Получение изображения...")
         contents = await file.read()
         nparr = np.frombuffer(contents, np.uint8)
         img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img_bgr is None:
-            print("❌ Ошибка: не удалось декодировать изображение.")
-            return "Fail"
+            return {"result": "Fail", "error": "Image decode failed"}
 
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-
-        # === 1. ROI через YOLOv5
-        print("🔍 Поиск ROI через YOLOv5...")
         results = model_v5(img_rgb)
         boxes = results.xyxy[0].cpu().numpy()
         if len(boxes) == 0:
-            print("❌ Ошибка: YOLOv5 не нашёл ROI.")
-            return "Fail"
+            return {"result": "Fail", "error": "YOLOv5 ROI not found"}
 
         x1, y1, x2, y2 = map(int, boxes[0][:4])
         roi = img_bgr[y1:y2, x1:x2]
-        print("✅ ROI найден.")
+        debug["roi_original_b64"] = to_base64(roi)
 
-        # === 2. Затемнение ROI
         roi_darker = darken(roi)
-        print("🌑 ROI затемнён.")
+        debug["roi_darker_b64"] = to_base64(roi_darker)
 
-        # === 3. Roboflow API (детекция цифр)
-        print("📡 Отправка ROI в Roboflow...")
         tmp_filename = "tmp.jpg"
         cv2.imwrite(tmp_filename, roi_darker)
-
         response = client.infer(tmp_filename, model_id=ROBOFLOW_MODEL_ID)
-        preds = response.get("predictions", [])
-
-        # Удаляем временный файл
         if os.path.exists(tmp_filename):
             os.remove(tmp_filename)
 
-        print("📡 Ответ получен от Roboflow.")
+        preds = response.get("predictions", [])
+        debug["roboflow_raw"] = preds
+        if not preds:
+            return {"result": "Fail", "debug": debug}
 
-        if preds:
-            median_y = np.median([p["y"] for p in preds])
-            preds = [p for p in preds if p["y"] >= median_y * 0.9]
-        else:
-            print("❌ Ошибка: нет предсказаний от Roboflow.")
-            return "Fail"
-
-        # === 4. Вырезка и сортировка цифр
-        print("✂️ Вырезка и сортировка цифр...")
+        median_y = np.median([p["y"] for p in preds])
+        preds = [p for p in preds if p["y"] >= median_y * 0.9]
         digit_imgs = []
         for p in sorted(preds, key=lambda b: b["x"]):
             x, y = int(p["x"]), int(p["y"])
@@ -95,35 +78,27 @@ async def predict(file: UploadFile = File(...)):
             digit_imgs.append(resized)
 
         if not digit_imgs:
-            print("❌ Ошибка: нет валидных цифр после вырезки.")
-            return "Fail"
+            return {"result": "Fail", "debug": debug}
 
         row = cv2.hconcat(digit_imgs)
-        print("🧵 Склейка цифр в одну строку завершена.")
+        debug["row_b64"] = to_base64(row)
 
-        # === 5. PaddleOCR (распознавание строки)
-        print("📖 Запуск PaddleOCR...")
         img_rgb_row = cv2.cvtColor(row, cv2.COLOR_BGR2RGB)
         ocr_results = ocr.ocr(img_rgb_row, det=False)
 
         if ocr_results and isinstance(ocr_results[0], list) and len(ocr_results[0]) > 0:
             raw_text = ocr_results[0][0][0]
-            print(f"📝 PaddleOCR raw_text: '{raw_text}'")
+            debug["raw_text"] = raw_text
             clean = re.sub(r"[^0-9]", "", raw_text).strip()
-
             if len(clean) == 8 and clean.startswith("1"):
                 clean = clean[1:]
-
             if clean:
-                print(f"✅ PaddleOCR успешно распознал: {clean}")
-                return clean
+                return {"result": clean, "debug": debug}
             else:
-                print("❌ Ошибка: строка после очистки пуста.")
-                return "Fail"
+                return {"result": "Fail", "debug": debug}
         else:
-            print("❌ Ошибка: PaddleOCR не распознал строку.")
-            return "Fail"
+            debug["raw_text"] = ""
+            return {"result": "Fail", "debug": debug}
 
     except Exception as e:
-        print(f"❌ Ошибка в /predict: {e}")
-        return "Fail"
+        return {"result": "Fail", "error": str(e), "debug": debug}
