@@ -80,7 +80,7 @@ async def predict(file: UploadFile = File(...)):
         if not digit_imgs:
             return {"result": "Fail", "debug": debug}
 
-               row = cv2.hconcat(digit_imgs)
+        row = cv2.hconcat(digit_imgs)
         debug["row_b64"] = to_base64(row)
 
         # === CLAHE-предобработка перед OCR
@@ -104,6 +104,3 @@ async def predict(file: UploadFile = File(...)):
         else:
             debug["raw_text"] = ""
             return {"result": "Fail", "debug": debug}
-
-    except Exception as e:
-        return {"result": "Fail", "error": str(e), "debug": debug}
