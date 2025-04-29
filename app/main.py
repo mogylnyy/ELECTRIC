@@ -84,7 +84,7 @@ async def predict(file: UploadFile = File(...)):
         debug["row_b64"] = to_base64(row)
 
         img_rgb_row = cv2.cvtColor(row, cv2.COLOR_BGR2RGB)
-        ocr_results = ocr.ocr(img_rgb_row, det=False)
+        ocr_results = ocr.ocr(img_rgb, det=False)
 
         if ocr_results and isinstance(ocr_results[0], list) and len(ocr_results[0]) > 0:
             raw_text = ocr_results[0][0][0]
