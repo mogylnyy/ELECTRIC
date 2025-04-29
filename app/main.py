@@ -1,5 +1,3 @@
-# app/main.py
-
 import os
 import io
 import cv2
@@ -24,7 +22,7 @@ app = FastAPI()
 print("🚀 Загрузка моделей...")
 model_v5 = torch.hub.load('yolov5', 'custom', path='app/yolov5_model/best.pt', source='local')
 ocr = PaddleOCR(det=False, use_angle_cls=False, lang='en')
-client = InferenceHTTPClient(api_url="https://detect.roboflow.com", api_key=ROBOFLOW_API_KEY)
+client = InferenceHTTPClient(api_url="https://serverless.roboflow.com", api_key=ROBOFLOW_API_KEY)
 print("✅ Модели загружены успешно.")
 
 # === Функция затемнения ROI
@@ -42,7 +40,7 @@ async def predict(file: UploadFile = File(...)):
             print("❌ Ошибка: не удалось декодировать изображение.")
             return "Fail"
 
-        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)  # RGB → YOLOv5
 
         # === 1. ROI через YOLOv5
         print("🔍 Поиск ROI через YOLOv5...")
@@ -53,24 +51,25 @@ async def predict(file: UploadFile = File(...)):
             return "Fail"
 
         x1, y1, x2, y2 = map(int, boxes[0][:4])
-        roi = img_bgr[y1:y2, x1:x2]
+        roi = img_bgr[y1:y2, x1:x2]  # Вырезка из BGR
         print("✅ ROI найден.")
+        cv2.imwrite("roi_extracted.jpg", roi)
 
         # === 2. Затемнение ROI
         roi_darker = darken(roi)
         print("🌑 ROI затемнён.")
 
-        # === 3. Roboflow API (детекция цифр)
+        # === 3. Roboflow API (через inference-sdk)
         print("📡 Отправка ROI в Roboflow...")
-
-        # Сохраняем ROI во временный файл
         tmp_filename = "tmp.jpg"
         cv2.imwrite(tmp_filename, roi_darker)
-
-        # Передаём путь к файлу через file_path
         response = client.infer(tmp_filename, model_id=ROBOFLOW_MODEL_ID)
         preds = response.get("predictions", [])
         print("📡 Ответ получен от Roboflow.")
+
+        # Опционально удалить временный файл:
+        if os.path.exists(tmp_filename):
+            os.remove(tmp_filename)
 
         if preds:
             median_y = np.median([p["y"] for p in preds])
@@ -99,6 +98,7 @@ async def predict(file: UploadFile = File(...)):
 
         row = cv2.hconcat(digit_imgs)
         print("🧵 Склейка цифр в одну строку завершена.")
+        cv2.imwrite("row_combined.jpg", row)
 
         # === 5. PaddleOCR (распознавание строки)
         print("📖 Запуск PaddleOCR...")
@@ -107,6 +107,7 @@ async def predict(file: UploadFile = File(...)):
 
         if results and isinstance(results[0], list) and len(results[0]) > 0:
             raw_text = results[0][0][0]
+            print(f"📝 PaddleOCR raw_text: '{raw_text}'")
             clean = re.sub(r"[^0-9]", "", raw_text).strip()
 
             if len(clean) == 8 and clean.startswith("1"):
