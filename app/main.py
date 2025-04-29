@@ -80,11 +80,16 @@ async def predict(file: UploadFile = File(...)):
         if not digit_imgs:
             return {"result": "Fail", "debug": debug}
 
-        row = cv2.hconcat(digit_imgs)
+               row = cv2.hconcat(digit_imgs)
         debug["row_b64"] = to_base64(row)
 
-        img_rgb_row = cv2.cvtColor(row, cv2.COLOR_BGR2RGB)
-        ocr_results = ocr.ocr(img_rgb, det=False)
+        # === CLAHE-предобработка перед OCR
+        row_gray = cv2.cvtColor(row, cv2.COLOR_BGR2GRAY)
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        row_clahe = clahe.apply(row_gray)
+        img_rgb_row = cv2.cvtColor(row_clahe, cv2.COLOR_GRAY2RGB)
+
+        ocr_results = ocr.ocr(img_rgb_row, det=False)
 
         if ocr_results and isinstance(ocr_results[0], list) and len(ocr_results[0]) > 0:
             raw_text = ocr_results[0][0][0]
