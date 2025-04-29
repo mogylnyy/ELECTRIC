@@ -1,5 +1,6 @@
+# app/main.py
+
 import os
-import io
 import cv2
 import numpy as np
 import torch
@@ -40,7 +41,7 @@ async def predict(file: UploadFile = File(...)):
             print("❌ Ошибка: не удалось декодировать изображение.")
             return "Fail"
 
-        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)  # RGB → YOLOv5
+        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
         # === 1. ROI через YOLOv5
         print("🔍 Поиск ROI через YOLOv5...")
@@ -51,25 +52,26 @@ async def predict(file: UploadFile = File(...)):
             return "Fail"
 
         x1, y1, x2, y2 = map(int, boxes[0][:4])
-        roi = img_bgr[y1:y2, x1:x2]  # Вырезка из BGR
+        roi = img_bgr[y1:y2, x1:x2]
         print("✅ ROI найден.")
-        cv2.imwrite("roi_extracted.jpg", roi)
 
         # === 2. Затемнение ROI
         roi_darker = darken(roi)
         print("🌑 ROI затемнён.")
 
-        # === 3. Roboflow API (через inference-sdk)
+        # === 3. Roboflow API (детекция цифр)
         print("📡 Отправка ROI в Roboflow...")
         tmp_filename = "tmp.jpg"
         cv2.imwrite(tmp_filename, roi_darker)
+
         response = client.infer(tmp_filename, model_id=ROBOFLOW_MODEL_ID)
         preds = response.get("predictions", [])
-        print("📡 Ответ получен от Roboflow.")
 
-        # Опционально удалить временный файл:
+        # Удаляем временный файл
         if os.path.exists(tmp_filename):
             os.remove(tmp_filename)
+
+        print("📡 Ответ получен от Roboflow.")
 
         if preds:
             median_y = np.median([p["y"] for p in preds])
@@ -98,15 +100,14 @@ async def predict(file: UploadFile = File(...)):
 
         row = cv2.hconcat(digit_imgs)
         print("🧵 Склейка цифр в одну строку завершена.")
-        cv2.imwrite("row_combined.jpg", row)
 
         # === 5. PaddleOCR (распознавание строки)
         print("📖 Запуск PaddleOCR...")
         img_rgb_row = cv2.cvtColor(row, cv2.COLOR_BGR2RGB)
-        results = ocr.ocr(img_rgb_row, det=False)
+        ocr_results = ocr.ocr(img_rgb_row, det=False)
 
-        if results and isinstance(results[0], list) and len(results[0]) > 0:
-            raw_text = results[0][0][0]
+        if ocr_results and isinstance(ocr_results[0], list) and len(ocr_results[0]) > 0:
+            raw_text = ocr_results[0][0][0]
             print(f"📝 PaddleOCR raw_text: '{raw_text}'")
             clean = re.sub(r"[^0-9]", "", raw_text).strip()
 
