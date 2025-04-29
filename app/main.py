@@ -71,7 +71,7 @@ async def predict(file: UploadFile = File(...)):
             w, h = int(p["width"] // 2), int(p["height"] // 2)
             x1, y1 = max(x - w, 0), max(y - h, 0)
             x2, y2 = min(x + w, roi.shape[1]), min(y + h, roi.shape[0])
-            digit_crop = roi[y1:y2, x1:x2]
+            digit_crop = roi_darker[y1:y2, x1:x2]
             if digit_crop.shape[0] < 10 or digit_crop.shape[1] < 10:
                 continue
             resized = cv2.resize(digit_crop, (32, 64))
@@ -84,11 +84,7 @@ async def predict(file: UploadFile = File(...)):
         debug["row_b64"] = to_base64(row)
 
         # === CLAHE-предобработка перед OCR
-        row_gray = cv2.cvtColor(row, cv2.COLOR_BGR2GRAY)
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-        row_clahe = clahe.apply(row_gray)
-        img_rgb_row = cv2.cvtColor(row_clahe, cv2.COLOR_GRAY2RGB)
-
+        img_rgb_row = cv2.cvtColor(row, cv2.COLOR_BGR2RGB)
         ocr_results = ocr.ocr(img_rgb_row, det=False)
 
         if ocr_results and isinstance(ocr_results[0], list) and len(ocr_results[0]) > 0:
