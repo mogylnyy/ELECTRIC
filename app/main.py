@@ -94,7 +94,7 @@ async def predict(file: UploadFile = File(...)):
                 clean = clean[1:]
 
             if clean and len(clean) <= 8:
-                return {"result": clean}
+                return clean
             else:
                 return {"result": "Fail"}
         else:
