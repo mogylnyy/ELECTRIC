@@ -16,6 +16,10 @@ ROBOFLOW_MODEL_ID = "digitdetector-unbek/1"
 
 app = FastAPI()
 
+@app.get("/ping")
+async def ping():
+    return
+
 print("🚀 Загрузка моделей...")
 model_v5 = torch.hub.load('yolov5', 'custom', path='app/yolov5_model/best.pt', source='local')
 ocr = PaddleOCR(
